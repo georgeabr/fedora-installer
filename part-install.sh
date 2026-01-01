@@ -1,106 +1,390 @@
-#!/bin/bash
+# works 3?
+#!/usr/bin/env bash
+# ENABLE VERBOSE DEBUGGING
+set -x
+START_TIME=$(date +%s)
+date
+set -euo pipefail
 
-# Configuration
+# -------------------------
+# CONFIGURATION
+# -------------------------
 EFI_PART="/dev/sda1"
 SWAP_PART="/dev/sda2"
 ROOT_PART="/dev/sda3"
 TARGET="/mnt/install"
-THREADS=$(nproc)
 
-if [ "$EUID" -ne 0 ]; then 
-  echo "Run as root (sudo ./script.sh)"
+NEW_USER="george"
+NEW_PASS="parola"
+NEW_HOSTNAME="fedora"
+
+# -------------------------
+# 0. PRE-FLIGHT CHECKS
+# -------------------------
+if [ "$EUID" -ne 0 ]; then
+  echo "CRITICAL: Run as root." >&2
   exit 1
 fi
 
+# A. INTERNET CHECK
+echo "Checking internet connectivity..."
+if ! ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then
+    echo "#####################################################"
+    echo "ERROR: No internet connection detected."
+    echo "Please connect to Wi-Fi or Ethernet and try again."
+    echo "#####################################################"
+    exit 1
+fi
+echo "Internet connection confirmed."
+
+# B. PARTITION CONFIRMATION
+set +x # Disable debug for the prompt to keep it clean
+echo "#####################################################"
+echo "INSTALLATION TARGETS:"
+echo "  EFI Partition:  $EFI_PART"
+echo "  Swap Partition: $SWAP_PART"
+echo "  Root Partition: $ROOT_PART"
+echo "  Target Mount:   $TARGET"
+echo "#####################################################"
+read -p "Are you sure you want to wipe these partitions and proceed? [y/N] " confirm
+if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "Aborted by user."
+    exit 1
+fi
+set -x # Re-enable debug
+
+trap 'rc=$?; set +e; umount -R "$TARGET" 2>/dev/null || true; exit $rc' EXIT
+
+# -------------------------
+# 1. LIVE SYSTEM PREP
+# -------------------------
+echo "#####################################################"
+echo "STEP 1: CONFIGURING LIVE SYSTEM SOURCE"
+echo "#####################################################"
+
+set +e
+
+# Enable ssh service
+systemctl enable --now sshd.service
+
+# A. CLEAN AUTOLOGIN (LIVE ENV)
+echo "Sanitizing SDDM Autologin..."
+if [ -f /etc/sddm.conf ]; then
+    echo "Patching /etc/sddm.conf..."
+    sed -i '/^User=liveuser/d' /etc/sddm.conf
+    sed -i '/^Session=live/d' /etc/sddm.conf
+fi
+
+if [ -d /etc/sddm.conf.d ]; then
+    echo "Cleaning /etc/sddm.conf.d/..."
+    rm -vf /etc/sddm.conf.d/*autologin*
+    rm -vf /etc/sddm.conf.d/*live*
+fi
+
+# Install fonts first (required for vconsole setup)
+dnf install -y terminus-fonts-console
+
+# B. LOCALE, KEYMAP & TIMEZONE
+echo "Configuring Locale (en_GB)..."
+echo "LANG=en_GB.UTF-8" > /etc/locale.conf
+export LANG=en_GB.UTF-8
+
+echo "Configuring Console (UK)..."
+cat <<VCON > /etc/vconsole.conf
+KEYMAP=uk
+XKBLAYOUT=gb
+FONT=ter-922b
+VCON
+
+# Restart the console service for font update
+systemctl restart systemd-vconsole-setup.service
+
+echo "Configuring Timezone (London)..."
+ln -sf /usr/share/zoneinfo/Europe/London /etc/localtime
+
+# C. HOSTNAME
+echo "Setting hostname to $NEW_HOSTNAME..."
+hostnamectl set-hostname "$NEW_HOSTNAME"
+echo "$NEW_HOSTNAME" > /etc/hostname
+
+# D. USER CREATION
+id -u "$NEW_USER" >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "Creating user $NEW_USER..."
+    useradd -m -G wheel "$NEW_USER"
+    if [ $? -ne 0 ]; then echo "ERROR: useradd failed"; exit 1; fi
+else
+    echo "User $NEW_USER already exists."
+fi
+
+# E. PASSWORDS
+echo "$NEW_USER:$NEW_PASS" | chpasswd
+echo "root:fedora" | chpasswd
+
+# F. USER DIRECTORIES
+echo "Configuring /home/$NEW_USER..."
+UHOME="/home/$NEW_USER"
+mkdir -v -p "$UHOME"/.config/{gtk-3.0,gtk-4.0,htop}
+mkdir -v -p "$UHOME"/{Documents,Downloads,Music,Pictures,Videos,Desktop,Templates,Public,.icons}
+mkdir -v -p "$UHOME"/.local/share/color-schemes
+mkdir -v -p "$UHOME"/.local/share/konsole
+
+# G. CONFIG FILES
+printf "[Settings]\ngtk-cursor-blink = 0\n" > "$UHOME"/.config/gtk-4.0/settings.ini
+printf "[Settings]\ngtk-cursor-blink = 0\n" > "$UHOME"/.config/gtk-3.0/settings.ini
+printf "gtk-cursor-blink = 0\n" > "$UHOME"/.gtkrc-2.0
+printf "gtk-cursor-blink = 0\n" > "$UHOME"/.gtkrc-2.0-kde
+
+echo "Downloading configs..."
+curl -f -s -L -o "$UHOME"/.vimrc https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/.vimrc
+curl -f -s -L -o "$UHOME"/.wezterm.lua https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/.wezterm.lua
+curl -f -s -L -o "$UHOME"/.config/htop/htoprc https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/v5/.config/htop/htoprc
+
+curl -f -s -L \
+  -o "$UHOME"/.local/share/konsole/"Profile 1.profile" \
+  "https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/Profile%201.profile"
+curl -f -s -L -o "$UHOME"/.local/share/konsole/WhiteOnBlack.colorscheme https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/WhiteOnBlack.colorscheme
+
+# KDE Configs
+cat <<KDEEOF > "$UHOME"/.config/kxkbrc
+[Layout]
+Use=true
+LayoutList=gb
+Options=
+Model=pc105
+Variant=
+KDEEOF
+
+echo 'export QT_SCALE_FACTOR_ROUNDING_POLICY=Round' >> "$UHOME"/.profile
+
+cat <<KDEEOF > "$UHOME"/.config/kdeglobals
+[General]
+AccentColor=104,107,111
+ColorScheme=BreezeDark-new-darker
+[KDE]
+LookAndFeelPackage=org.kde.breezedark.desktop
+CursorBlinkRate=0
+AnimationDurationFactor=0
+KDEEOF
+
+cat <<KDEEOF > "$UHOME"/.config/kcminputrc
+[Keyboard]
+NumLock=0
+[Mouse]
+cursorSize=40
+cursorTheme=XCursor-Pro-Dark
+KDEEOF
+
+cat <<KDEEOF > "$UHOME"/.config/klaunchrc
+[BusyCursorSettings]
+Bouncing=false
+
+[FeedbackStyle]
+BusyCursor=false
+TaskbarButton=false
+KDEEOF
+
+cat <<KDEEOF > "$UHOME"/.config/kwalletrc
+[Wallet]
+Enabled=false
+First Use=false
+KDEEOF
+
+cat <<KDEEOF > "$UHOME"/.config/konsolerc
+[Desktop Entry]
+DefaultProfile=Profile 1.profile
+
+[General]
+ConfigVersion=1
+
+[KonsoleWindow]
+AllowMenuAccelerators=true
+RemoveWindowTitleBarAndFrame=true
+
+[MainWindow]
+ToolBarsMovable=Enabled
+
+[MainWindow][Toolbar sessionToolbar]
+IconSize=16
+ToolButtonStyle=TextOnly
+
+[SplitView]
+SplitViewVisibility=AlwaysHideSplitHeader
+
+[ThumbnailsSettings]
+EnableThumbnails=false
+
+[UiSettings]
+ColorScheme=
+KDEEOF
+
+cat <<KDEEOF > "$UHOME"/.config/kwinrulesrc
+[2c0055f0-3a1a-4cbb-83d0-1bfaa5e348bc]
+Description=Window settings for org.wezfurlong.wezterm
+maximizehoriz=true
+maximizehorizrule=3
+maximizevert=true
+maximizevertrule=3
+noborder=true
+noborderrule=3
+title=bash
+types=1
+wmclass=wezterm-gui org.wezfurlong.wezterm
+wmclasscomplete=true
+wmclassmatch=1
+
+[6a08d7a5-ee72-4a36-915a-d3fb295eb0c4]
+Description=Kitty terminal emulator
+maximizehoriz=true
+maximizehorizrule=3
+maximizevert=true
+maximizevertrule=3
+noborder=true
+noborderrule=3
+wmclass=kitty
+wmclassmatch=1
+
+[General]
+count=2
+rules=2c0055f0-3a1a-4cbb-83d0-1bfaa5e348bc,6a08d7a5-ee72-4a36-915a-d3fb295eb0c4
+KDEEOF
+
+# H. THEMES
+echo "Downloading themes..."
+CURL_BASE="https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master"
+SCHEMES=("BreezeDark1" "BreezeDark-new-darker" "Chocula-darker-warm" "Chocula-darker" "We10XOSDark1")
+for s in "${SCHEMES[@]}"; do
+  curl -f -s -L -o "$UHOME/.local/share/color-schemes/$s.colors" "$CURL_BASE/$s.colors"
+done
+
+curl -f -s -L -o /tmp/cursors.tar.xz https://github.com/ful1e5/XCursor-pro/releases/download/v2.0.2/XCursor-Pro-Dark.tar.xz
+curl -f -s -L -o /tmp/hackneyed.tar.bz2 https://github.com/georgeabr/linux-configs/raw/refs/heads/master/Hackneyed-Dark-36px-0.9.3-right-handed.tar.bz2
+
+tar -xf /tmp/cursors.tar.xz -C "$UHOME"/.icons
+tar -xf /tmp/hackneyed.tar.bz2 -C "$UHOME"/.icons
+
+# Fix Ownership
+chown -R "$NEW_USER:$NEW_USER" "$UHOME"
+
 set -e
 
-echo "--- 1. CLEANUP ---"
-setenforce 0 || true
-umount -R $TARGET 2>/dev/null || true
-swapoff $SWAP_PART 2>/dev/null || true
+# -------------------------
+# 2. DISK PREPARATION
+# -------------------------
+echo "#####################################################"
+echo "STEP 2: PREPARING TARGET DISKS"
+echo "#####################################################"
 
-echo "--- 2. FORMAT AND MOUNT ---"
-mkfs.ext4 -F "$ROOT_PART"
-mkdir -p $TARGET
-mount "$ROOT_PART" $TARGET
+umount -R "$TARGET" 2>/dev/null || true
+echo "Formatting $ROOT_PART..."
+mkfs.ext4 -F -q "$ROOT_PART"
+mkdir -p "$TARGET"
+mount "$ROOT_PART" "$TARGET"
 
-mkdir -p $TARGET/boot/efi
-mount "$EFI_PART" $TARGET/boot/efi
+mkdir -p "$TARGET/boot/efi"
+echo "Mounting EFI..."
+mount "$EFI_PART" "$TARGET/boot/efi"
 
 if ! blkid "$SWAP_PART" | grep -q 'TYPE="swap"'; then
-    mkswap "$SWAP_PART"
+  mkswap "$SWAP_PART"
 fi
 swapon "$SWAP_PART" || true
 
-echo "--- 3. CREATING SKELETON & SYSTEM COPY ---"
-mkdir -p $TARGET/{dev,proc,sys,run,tmp,var/tmp,mnt,media,home,root,etc,usr,bin,lib,lib64}
-chmod 1777 $TARGET/tmp $TARGET/var/tmp
+# -------------------------
+# 3. CLONING ROOT
+# -------------------------
+echo "#####################################################"
+echo "STEP 3: CLONING LIVE SYSTEM TO DISK"
+echo "#####################################################"
 
-# Main copy excluding virtual dirs and the EFI mount
-rsync -aAX --quiet --exclude={"/dev/*","/proc/*","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/lost+found","/boot/efi/*"} / "$TARGET/" || {
-    RET=$?
-    if [ $RET -ne 23 ] && [ $RET -ne 24 ]; then exit $RET; fi
-}
+# Copy root partition.
+# Source is clean (no autologin, user ready, locale set)
+sudo rsync -aAX --info=progress2 \
+  --exclude="/dev/*" --exclude="/proc/*" --exclude="/sys/*" \
+  --exclude="/tmp/*" --exclude="/run/*" --exclude="/mnt/*" \
+  --exclude="/media/*" --exclude="/lost+found" \
+  / "$TARGET/" 2>&1 | grep -v "lsetxattr" || true
 
-# Sync EFI files separately (vfat compatible)
-rsync -rt /boot/efi/ "$TARGET/boot/efi/"
+echo "Checking for /etc/passwd..."
+if [ -f "$TARGET/etc/passwd" ]; then
+    echo "SUCCESS: /etc/passwd exists."
+else
+    echo "FATAL: /etc/passwd missing."
+    exit 1
+fi
+
+# -------------------------
+# 4. FINALIZING EFI
+# -------------------------
+echo "#####################################################"
+echo "STEP 4: FINALIZING EFI"
+echo "#####################################################"
+sudo cp -RT /boot/efi/ "$TARGET/boot/efi/" >/dev/null 2>&1
 sync
 
-echo "--- 4. BINDING VIRTUAL FILESYSTEMS ---"
-for i in dev proc sys run; do
-    mount --bind /$i $TARGET/$i
-done
-mount -t efivarfs efivarfs $TARGET/sys/firmware/efi/efivars || true
+# -------------------------
+# 5. BOOTLOADER
+# -------------------------
+echo "#####################################################"
+echo "STEP 5: INSTALLING BOOTLOADER (CHROOT)"
+echo "#####################################################"
 
-ROOT_UUID=$(blkid -s UUID -o value "$ROOT_PART")
-EFI_UUID=$(blkid -s UUID -o value "$EFI_PART")
-SWAP_UUID=$(blkid -s UUID -o value "$SWAP_PART")
+for i in dev proc sys run; do mount --bind "/$i" "$TARGET/$i"; done
+mount -t efivarfs efivarfs "$TARGET/sys/firmware/efi/efivars" 2>/dev/null || true
 
-cat <<EOF > $TARGET/etc/fstab
+ROOT_UUID="$(blkid -s UUID -o value "$ROOT_PART")"
+EFI_UUID="$(blkid -s UUID -o value "$EFI_PART")"
+SWAP_UUID="$(blkid -s UUID -o value "$SWAP_PART")"
+
+cat <<EOF > "$TARGET/etc/fstab"
 UUID=$ROOT_UUID / ext4 defaults 1 1
 UUID=$EFI_UUID /boot/efi vfat defaults 0 2
 UUID=$SWAP_UUID none swap sw 0 0
 EOF
 
-echo "--- 5. REPAIRING KERNEL ENTRIES (CHROOT) ---"
-chroot $TARGET /bin/bash <<CHROOT_DELIMITER
-set -e
+chroot "$TARGET" /bin/bash <<CHROOT_EOF
+set -x
+set -euo pipefail
 
-echo "Creating Fedora EFI stub..."
+# Re-affirm passwords
+echo "$NEW_USER:$NEW_PASS" | chpasswd
+echo "root:fedora" | chpasswd
+
+# Re-affirm hostname
+echo "$NEW_HOSTNAME" > /etc/hostname
+
+# Re-affirm Locale & Keymap (Redundant safety)
+echo "LANG=en_GB.UTF-8" > /etc/locale.conf
+ln -sf /usr/share/zoneinfo/Europe/London /etc/localtime
+cat <<VCON > /etc/vconsole.conf
+KEYMAP=uk
+XKBLAYOUT=gb
+FONT=ter-922b
+VCON
+
+# Bootloader
 mkdir -p /boot/efi/EFI/fedora
-cat <<EOF > /boot/efi/EFI/fedora/grub.cfg
+cat <<GRUBCFG > /boot/efi/EFI/fedora/grub.cfg
 search --no-floppy --fs-uuid --set=dev $ROOT_UUID
 set prefix=(\\\$dev)/boot/grub2
 export \\\$prefix
 configfile \\\$prefix/grub.cfg
-EOF
+GRUBCFG
 
-echo "Cleaning broken build paths..."
-# Delete the entries pointing to /home/fedora/Livecds/...
 rm -f /boot/loader/entries/*.conf
-
-echo "Generating local boot entries..."
-# Get the currently installed kernel version
-KERNEL_VERSION=\$(ls /lib/modules | head -n 1)
-# Create a valid local entry for this kernel
-kernel-install add \$KERNEL_VERSION /lib/modules/\$KERNEL_VERSION/vmlinuz
-
-echo "Updating GRUB and NVRAM..."
+KVER="\$(ls /lib/modules | head -n 1)"
+kernel-install add "\$KVER" "/lib/modules/\$KVER/vmlinuz"
 grub2-mkconfig -o /boot/grub2/grub.cfg
 dnf reinstall -y grub2-efi-x64 shim-x64
-efibootmgr -c -d /dev/sda -p 1 -L "fedora" -l "\\EFI\\fedora\\shimx64.efi" || true
+efibootmgr -c -d /dev/sda -p 1 -L "FedoraNew" -l "\\EFI\\fedora\\shimx64.efi" || true
 
-echo "Setting root password..."
-echo "root:fedora" | chpasswd
-
-echo "Enabling SELinux relabeling..."
 touch /.autorelabel
-CHROOT_DELIMITER
+CHROOT_EOF
 
-echo "--- 6. FINAL VERIFICATION ---"
-echo "New Boot Entry Contents:"
-cat $TARGET/boot/loader/entries/*.conf | grep -E 'linux|initrd'
-efibootmgr | grep -i fedora
-
-echo "----------------------------------------------------"
-echo "DONE. Run: umount -R $TARGET && reboot"
+set +x
+echo "#####################################################"
+DURATION=$(( $(date +%s) - START_TIME ))
+printf "PROCESS COMPLETE. Duration: %d minutes and %d seconds\n" "$((DURATION / 60))" "$((DURATION % 60))"
+echo "Command: umount -R $TARGET && reboot"
+echo "#####################################################"
+date
