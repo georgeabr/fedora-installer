@@ -1,4 +1,4 @@
-# works 3?
+# works 5
 #!/usr/bin/env bash
 # ENABLE VERBOSE DEBUGGING
 set -x
@@ -38,7 +38,7 @@ fi
 echo "Internet connection confirmed."
 
 # B. PARTITION CONFIRMATION
-set +x # Disable debug for the prompt to keep it clean
+set +x # Disable debug for clean prompt
 echo "#####################################################"
 echo "INSTALLATION TARGETS:"
 echo "  EFI Partition:  $EFI_PART"
@@ -51,7 +51,7 @@ if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
     echo "Aborted by user."
     exit 1
 fi
-set -x # Re-enable debug
+set -x # Enable debug
 
 trap 'rc=$?; set +e; umount -R "$TARGET" 2>/dev/null || true; exit $rc' EXIT
 
@@ -81,6 +81,9 @@ if [ -d /etc/sddm.conf.d ]; then
     rm -vf /etc/sddm.conf.d/*live*
 fi
 
+# Install RPM Fusion (Added -y)
+dnf install -y https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+
 # Install fonts first (required for vconsole setup)
 dnf install -y terminus-fonts-console
 
@@ -102,12 +105,36 @@ systemctl restart systemd-vconsole-setup.service
 echo "Configuring Timezone (London)..."
 ln -sf /usr/share/zoneinfo/Europe/London /etc/localtime
 
-# C. HOSTNAME
+# C. JOURNALD CONFIGURATION (STRICT FORMAT)
+echo "Configuring Journald (MaxUse=100M)..."
+mkdir -p /etc/systemd
+JCONF="/etc/systemd/journald.conf"
+
+if [ -f "$JCONF" ]; then
+    # If the setting exists (commented or not), replace it in place
+    if grep -q "^#\?SystemMaxUse=" "$JCONF"; then
+        sed -i 's/^#\?SystemMaxUse=.*/SystemMaxUse=100M/' "$JCONF"
+    else
+        # Setting missing. Check for [Journal] header.
+        if grep -q "^\[Journal\]" "$JCONF"; then
+             # Header exists, append value
+             echo "SystemMaxUse=100M" >> "$JCONF"
+        else
+             # No header, append both
+             echo -e "\n[Journal]\nSystemMaxUse=100M" >> "$JCONF"
+        fi
+    fi
+else
+    # File missing, create fresh
+    echo -e "[Journal]\nSystemMaxUse=100M" > "$JCONF"
+fi
+
+# D. HOSTNAME
 echo "Setting hostname to $NEW_HOSTNAME..."
 hostnamectl set-hostname "$NEW_HOSTNAME"
 echo "$NEW_HOSTNAME" > /etc/hostname
 
-# D. USER CREATION
+# E. USER CREATION
 id -u "$NEW_USER" >/dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Creating user $NEW_USER..."
@@ -117,19 +144,20 @@ else
     echo "User $NEW_USER already exists."
 fi
 
-# E. PASSWORDS
+# F. PASSWORDS
 echo "$NEW_USER:$NEW_PASS" | chpasswd
 echo "root:fedora" | chpasswd
 
-# F. USER DIRECTORIES
+# G. USER DIRECTORIES
 echo "Configuring /home/$NEW_USER..."
 UHOME="/home/$NEW_USER"
 mkdir -v -p "$UHOME"/.config/{gtk-3.0,gtk-4.0,htop}
 mkdir -v -p "$UHOME"/{Documents,Downloads,Music,Pictures,Videos,Desktop,Templates,Public,.icons}
 mkdir -v -p "$UHOME"/.local/share/color-schemes
 mkdir -v -p "$UHOME"/.local/share/konsole
+mkdir -v -p "$UHOME"/.config/kitty
 
-# G. CONFIG FILES
+# H. CONFIG FILES
 printf "[Settings]\ngtk-cursor-blink = 0\n" > "$UHOME"/.config/gtk-4.0/settings.ini
 printf "[Settings]\ngtk-cursor-blink = 0\n" > "$UHOME"/.config/gtk-3.0/settings.ini
 printf "gtk-cursor-blink = 0\n" > "$UHOME"/.gtkrc-2.0
@@ -144,6 +172,10 @@ curl -f -s -L \
   -o "$UHOME"/.local/share/konsole/"Profile 1.profile" \
   "https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/Profile%201.profile"
 curl -f -s -L -o "$UHOME"/.local/share/konsole/WhiteOnBlack.colorscheme https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/WhiteOnBlack.colorscheme
+
+curl -f -s -L -o "$UHOME"/.config/kitty/kitty.conf https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/kitty.conf
+curl -f -s -L -o "$UHOME"/.config/kitty/current-theme.conf https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/current-theme.conf
+
 
 # KDE Configs
 cat <<KDEEOF > "$UHOME"/.config/kxkbrc
@@ -249,7 +281,7 @@ count=2
 rules=2c0055f0-3a1a-4cbb-83d0-1bfaa5e348bc,6a08d7a5-ee72-4a36-915a-d3fb295eb0c4
 KDEEOF
 
-# H. THEMES
+# I. THEMES
 echo "Downloading themes..."
 CURL_BASE="https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master"
 SCHEMES=("BreezeDark1" "BreezeDark-new-darker" "Chocula-darker-warm" "Chocula-darker" "We10XOSDark1")
@@ -298,7 +330,7 @@ echo "STEP 3: CLONING LIVE SYSTEM TO DISK"
 echo "#####################################################"
 
 # Copy root partition.
-# Source is clean (no autologin, user ready, locale set)
+# Source is clean (no autologin, user ready, locale set, journald set)
 sudo rsync -aAX --info=progress2 \
   --exclude="/dev/*" --exclude="/proc/*" --exclude="/sys/*" \
   --exclude="/tmp/*" --exclude="/run/*" --exclude="/mnt/*" \
@@ -317,16 +349,16 @@ fi
 # 4. FINALIZING EFI
 # -------------------------
 echo "#####################################################"
-echo "STEP 4: FINALIZING EFI"
+echo "STEP 4: FINALISING EFI"
 echo "#####################################################"
 sudo cp -RT /boot/efi/ "$TARGET/boot/efi/" >/dev/null 2>&1
 sync
 
 # -------------------------
-# 5. BOOTLOADER
+# 5. BOOTLOADER & PACKAGES
 # -------------------------
 echo "#####################################################"
-echo "STEP 5: INSTALLING BOOTLOADER (CHROOT)"
+echo "STEP 5: INSTALLING BOOTLOADER & PACKAGES (CHROOT)"
 echo "#####################################################"
 
 for i in dev proc sys run; do mount --bind "/$i" "$TARGET/$i"; done
@@ -377,6 +409,11 @@ kernel-install add "\$KVER" "/lib/modules/\$KVER/vmlinuz"
 grub2-mkconfig -o /boot/grub2/grub.cfg
 dnf reinstall -y grub2-efi-x64 shim-x64
 efibootmgr -c -d /dev/sda -p 1 -L "FedoraNew" -l "\\EFI\\fedora\\shimx64.efi" || true
+
+# Install amenities & Multimedia
+dnf install -y htop mc iotop vainfo vim intel-media-driver kitty
+dnf swap ffmpeg-free ffmpeg --allowerasing -y
+dnf update @multimedia --setopt="install_weak_deps=False" --exclude=PackageKit-gstreamer-plugin -y
 
 touch /.autorelabel
 CHROOT_EOF
