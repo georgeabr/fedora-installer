@@ -1,4 +1,3 @@
-# works 5
 #!/usr/bin/env bash
 # ENABLE VERBOSE DEBUGGING
 set -x
@@ -111,21 +110,16 @@ mkdir -p /etc/systemd
 JCONF="/etc/systemd/journald.conf"
 
 if [ -f "$JCONF" ]; then
-    # If the setting exists (commented or not), replace it in place
     if grep -q "^#\?SystemMaxUse=" "$JCONF"; then
         sed -i 's/^#\?SystemMaxUse=.*/SystemMaxUse=100M/' "$JCONF"
     else
-        # Setting missing. Check for [Journal] header.
         if grep -q "^\[Journal\]" "$JCONF"; then
-             # Header exists, append value
              echo "SystemMaxUse=100M" >> "$JCONF"
         else
-             # No header, append both
              echo -e "\n[Journal]\nSystemMaxUse=100M" >> "$JCONF"
         fi
     fi
 else
-    # File missing, create fresh
     echo -e "[Journal]\nSystemMaxUse=100M" > "$JCONF"
 fi
 
@@ -151,11 +145,10 @@ echo "root:fedora" | chpasswd
 # G. USER DIRECTORIES
 echo "Configuring /home/$NEW_USER..."
 UHOME="/home/$NEW_USER"
-mkdir -v -p "$UHOME"/.config/{gtk-3.0,gtk-4.0,htop}
+mkdir -v -p "$UHOME"/.config/{gtk-3.0,gtk-4.0,htop,kitty}
 mkdir -v -p "$UHOME"/{Documents,Downloads,Music,Pictures,Videos,Desktop,Templates,Public,.icons}
 mkdir -v -p "$UHOME"/.local/share/color-schemes
 mkdir -v -p "$UHOME"/.local/share/konsole
-mkdir -v -p "$UHOME"/.config/kitty
 
 # H. CONFIG FILES
 printf "[Settings]\ngtk-cursor-blink = 0\n" > "$UHOME"/.config/gtk-4.0/settings.ini
@@ -168,14 +161,15 @@ curl -f -s -L -o "$UHOME"/.vimrc https://raw.githubusercontent.com/georgeabr/lin
 curl -f -s -L -o "$UHOME"/.wezterm.lua https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/.wezterm.lua
 curl -f -s -L -o "$UHOME"/.config/htop/htoprc https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/v5/.config/htop/htoprc
 
+# Konsole Profiles
 curl -f -s -L \
   -o "$UHOME"/.local/share/konsole/"Profile 1.profile" \
   "https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/Profile%201.profile"
 curl -f -s -L -o "$UHOME"/.local/share/konsole/WhiteOnBlack.colorscheme https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/WhiteOnBlack.colorscheme
 
+# Kitty Configs
 curl -f -s -L -o "$UHOME"/.config/kitty/kitty.conf https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/kitty.conf
 curl -f -s -L -o "$UHOME"/.config/kitty/current-theme.conf https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/current-theme.conf
-
 
 # KDE Configs
 cat <<KDEEOF > "$UHOME"/.config/kxkbrc
@@ -210,7 +204,6 @@ KDEEOF
 cat <<KDEEOF > "$UHOME"/.config/klaunchrc
 [BusyCursorSettings]
 Bouncing=false
-
 [FeedbackStyle]
 BusyCursor=false
 TaskbarButton=false
@@ -225,27 +218,20 @@ KDEEOF
 cat <<KDEEOF > "$UHOME"/.config/konsolerc
 [Desktop Entry]
 DefaultProfile=Profile 1.profile
-
 [General]
 ConfigVersion=1
-
 [KonsoleWindow]
 AllowMenuAccelerators=true
 RemoveWindowTitleBarAndFrame=true
-
 [MainWindow]
 ToolBarsMovable=Enabled
-
 [MainWindow][Toolbar sessionToolbar]
 IconSize=16
 ToolButtonStyle=TextOnly
-
 [SplitView]
 SplitViewVisibility=AlwaysHideSplitHeader
-
 [ThumbnailsSettings]
 EnableThumbnails=false
-
 [UiSettings]
 ColorScheme=
 KDEEOF
@@ -410,7 +396,7 @@ grub2-mkconfig -o /boot/grub2/grub.cfg
 dnf reinstall -y grub2-efi-x64 shim-x64
 efibootmgr -c -d /dev/sda -p 1 -L "FedoraNew" -l "\\EFI\\fedora\\shimx64.efi" || true
 
-# Install amenities & Multimedia
+# Install amenities & Multimedia (Added kitty)
 dnf install -y htop mc iotop vainfo vim intel-media-driver kitty
 dnf swap ffmpeg-free ffmpeg --allowerasing -y
 dnf update @multimedia --setopt="install_weak_deps=False" --exclude=PackageKit-gstreamer-plugin -y
