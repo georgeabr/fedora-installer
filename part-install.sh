@@ -81,7 +81,8 @@ if [ -d /etc/sddm.conf.d ]; then
 fi
 
 # Install RPM Fusion (Added -y)
-dnf install -y https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+dnf install -y https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+  https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
 
 # Install fonts first (required for vconsole setup)
 dnf install -y terminus-fonts-console
@@ -159,17 +160,21 @@ printf "gtk-cursor-blink = 0\n" > "$UHOME"/.gtkrc-2.0-kde
 echo "Downloading configs..."
 curl -f -s -L -o "$UHOME"/.vimrc https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/.vimrc
 curl -f -s -L -o "$UHOME"/.wezterm.lua https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/.wezterm.lua
-curl -f -s -L -o "$UHOME"/.config/htop/htoprc https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/v5/.config/htop/htoprc
+curl -f -s -L -o "$UHOME"/.config/htop/htoprc \
+  https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/v5/.config/htop/htoprc
 
 # Konsole Profiles
 curl -f -s -L \
   -o "$UHOME"/.local/share/konsole/"Profile 1.profile" \
   "https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/Profile%201.profile"
-curl -f -s -L -o "$UHOME"/.local/share/konsole/WhiteOnBlack.colorscheme https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/WhiteOnBlack.colorscheme
+curl -f -s -L -o "$UHOME"/.local/share/konsole/WhiteOnBlack.colorscheme \
+  https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/WhiteOnBlack.colorscheme
 
 # Kitty Configs
-curl -f -s -L -o "$UHOME"/.config/kitty/kitty.conf https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/kitty.conf
-curl -f -s -L -o "$UHOME"/.config/kitty/current-theme.conf https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/current-theme.conf
+curl -f -s -L -o "$UHOME"/.config/kitty/kitty.conf \
+  https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/kitty.conf
+curl -f -s -L -o "$UHOME"/.config/kitty/current-theme.conf \
+  https://raw.githubusercontent.com/georgeabr/linux-configs/refs/heads/master/current-theme.conf
 
 # KDE Configs
 cat <<KDEEOF > "$UHOME"/.config/kxkbrc
@@ -276,7 +281,8 @@ for s in "${SCHEMES[@]}"; do
 done
 
 curl -f -s -L -o /tmp/cursors.tar.xz https://github.com/ful1e5/XCursor-pro/releases/download/v2.0.2/XCursor-Pro-Dark.tar.xz
-curl -f -s -L -o /tmp/hackneyed.tar.bz2 https://github.com/georgeabr/linux-configs/raw/refs/heads/master/Hackneyed-Dark-36px-0.9.3-right-handed.tar.bz2
+curl -f -s -L -o /tmp/hackneyed.tar.bz2 \
+  https://github.com/georgeabr/linux-configs/raw/refs/heads/master/Hackneyed-Dark-36px-0.9.3-right-handed.tar.bz2
 
 tar -xf /tmp/cursors.tar.xz -C "$UHOME"/.icons
 tar -xf /tmp/hackneyed.tar.bz2 -C "$UHOME"/.icons
