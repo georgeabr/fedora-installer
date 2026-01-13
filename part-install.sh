@@ -409,7 +409,7 @@ grub2-mkconfig -o /boot/grub2/grub.cfg
 dnf reinstall -y grub2-efi-x64 shim-x64
 
 # Execute corrected efibootmgr command
-efibootmgr -c -d "$DISK" -p "$PART_NUM" -L "FedoraNew" -l '\EFI\fedora\shimx64.efi'
+efibootmgr -c -d "$DISK" -p "$PART_NUM" -L "FedoraNewOne" -l '\EFI\fedora\shimx64.efi'
 
 # Install amenities & Multimedia (Added kitty)
 dnf install -y htop mc iotop vainfo vim intel-media-driver kitty
