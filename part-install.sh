@@ -13,6 +13,13 @@ SWAP_PART="/dev/sda2"
 ROOT_PART="/dev/sda3"
 TARGET="/mnt/install"
 
+# Extract the parent disk (e.g., /dev/sda or /dev/nvme0n1)
+DISK=$(lsblk -no PKNAME "$EFI_PART")
+DISK="/dev/$DISK"
+
+# Extract the partition number (e.g., 1 or 2)
+PART_NUM=$(lsblk -no PARTN "$EFI_PART")
+
 NEW_USER="george"
 NEW_PASS="parola"
 NEW_HOSTNAME="fedora"
@@ -400,7 +407,9 @@ KVER="\$(ls /lib/modules | head -n 1)"
 kernel-install add "\$KVER" "/lib/modules/\$KVER/vmlinuz"
 grub2-mkconfig -o /boot/grub2/grub.cfg
 dnf reinstall -y grub2-efi-x64 shim-x64
-efibootmgr -c -d /dev/sda -p 1 -L "FedoraNew" -l "\\EFI\\fedora\\shimx64.efi" || true
+
+# Execute corrected efibootmgr command
+efibootmgr -c -d "$DISK" -p "$PART_NUM" -L "FedoraNew" -l '\EFI\fedora\shimx64.efi'
 
 # Install amenities & Multimedia (Added kitty)
 dnf install -y htop mc iotop vainfo vim intel-media-driver kitty
