@@ -47,12 +47,13 @@ echo "Internet connection confirmed."
 set +x # Disable debug for clean prompt
 echo "#####################################################"
 echo "INSTALLATION TARGETS:"
-echo "  EFI Partition:  $EFI_PART"
-echo "  Swap Partition: $SWAP_PART"
-echo "  Root Partition: $ROOT_PART"
-echo "  Target Mount:   $TARGET"
+echo "  Bootloader disk: $DISK"
+echo "  EFI Partition:   $EFI_PART"
+echo "  Swap Partition:  $SWAP_PART"
+echo "  Root Partition:  $ROOT_PART"
+echo "  Target Mount:    $TARGET"
 echo "#####################################################"
-read -p "Are you sure you want to wipe these partitions and proceed? [y/N] " confirm
+read -p "Are you sure you want to wipe the root (/) partition and proceed? [y/N] " confirm
 if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
     echo "Aborted by user."
     exit 1
