@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=34
+SCRIPT_VERSION=39
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -579,9 +579,16 @@ EOF
 	
 	printf "\nCopying required files to rootfs.\n"
 	
-	# Copy /etc/resolv.conf for DNS in chroot
-	mkdir -p /mnt/etc
-	cp /etc/resolv.conf /mnt/etc/
+	# Clean up and dereference symlink when copying DNS config
+	printf "  Copying /etc/resolv.conf to /mnt/etc/resolv.conf (following symlinks)...\n"
+	rm -f /mnt/etc/resolv.conf
+	if cp -L /etc/resolv.conf /mnt/etc/resolv.conf 2>/dev/null; then
+		printf "    ✓ Successfully copied host resolv.conf to target\n"
+	else
+		printf "    ⚠ Host resolv.conf copy failed (or was symlink); writing fallback nameserver\n"
+		echo "nameserver 1.1.1.1" > /mnt/etc/resolv.conf
+		printf "    ✓ Created minimal resolv.conf with Cloudflare DNS (1.1.1.1)\n"
+	fi
 	
 	printf "\nPreparing chroot environment.\n"
 	
@@ -606,29 +613,18 @@ EOF
 	fi
 	
 	# Ensure SELinux configuration exists
+	printf "\nConfiguring SELinux in target root (/mnt)...\n"
 	mkdir -p /mnt/etc/selinux
+	printf "  Creating /mnt/etc/selinux/config with SELINUX=enforcing\n"
 	cat << 'EOF' > /mnt/etc/selinux/config
 SELINUX=enforcing
 SELINUXTYPE=targeted
 EOF
 	
 	# Trigger automatic relabeling on first boot
+	printf "  Creating /mnt/.autorelabel for automatic relabeling on first boot\n"
 	touch /mnt/.autorelabel
-	
-	# Apply initial extended security attributes to mounted target root
-	if command -v setfiles &>/dev/null; then
-		if [[ -f /mnt/etc/selinux/targeted/contexts/files/file_contexts ]]; then
-			printf "\nApplying initial SELinux contexts to target filesystem...\n"
-			setfiles -r /mnt /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt 2>/dev/null || {
-				printf "\n\e[1;33mWarning: setfiles encountered errors during initial labeling (non-fatal).\e[0m\n"
-				printf "Final labeling will occur on first boot via .autorelabel.\n"
-			}
-		else
-			printf "\n\e[1;33mWarning: SELinux file_contexts not found yet (will be relabeled on first boot).\e[0m\n"
-		fi
-	else
-		printf "\n\e[1;33mWarning: setfiles not found on live system (SELinux will relabel on first boot).\e[0m\n"
-	fi
+	printf "  SELinux configuration in target complete. Full labeling will occur in chroot via fedora-2.sh.\n"
 	
 	# Mount necessary filesystems for chroot
 	mount --bind /dev /mnt/dev
