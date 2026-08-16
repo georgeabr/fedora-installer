@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=39
+SCRIPT_VERSION=40
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -615,16 +615,18 @@ EOF
 	# Ensure SELinux configuration exists
 	printf "\nConfiguring SELinux in target root (/mnt)...\n"
 	mkdir -p /mnt/etc/selinux
-	printf "  Creating /mnt/etc/selinux/config with SELINUX=enforcing\n"
+	printf "  Creating initial /etc/selinux/config (will be refined in chroot)\n"
 	cat << 'EOF' > /mnt/etc/selinux/config
-SELINUX=enforcing
+SELINUX=permissive
 SELINUXTYPE=targeted
 EOF
 	
 	# Trigger automatic relabeling on first boot
 	printf "  Creating /mnt/.autorelabel for automatic relabeling on first boot\n"
 	touch /mnt/.autorelabel
-	printf "  SELinux configuration in target complete. Full labeling will occur in chroot via fedora-2.sh.\n"
+	printf "  SELinux will be configured in permissive mode initially for safe first boot.\n"
+	printf "  Kernel boot parameters will include: selinux=1 security=selinux enforcing=0\n"
+	printf "  After first boot, you can switch to enforcing mode (see completion message).\n"
 	
 	# Mount necessary filesystems for chroot
 	mount --bind /dev /mnt/dev
