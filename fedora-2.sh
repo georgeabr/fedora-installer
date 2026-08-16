@@ -26,6 +26,11 @@ printf "Configuring locale to London/UK.\n"
 printf "\nRefreshing package cache and upgrading system.\n"
 dnf5 upgrade --refresh -y
 
+# Restore SELinux context on resolv.conf copied from host
+if command -v restorecon &>/dev/null; then
+    restorecon -v /etc/resolv.conf 2>/dev/null || true
+fi
+
 dnf5 install -y terminus-fonts
 
 rm -rf /etc/localtime
@@ -55,6 +60,35 @@ dnf5 install -y "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-releas
 
 printf "\nUpgrading core group packages.\n"
 dnf5 group upgrade -y core
+
+printf "\nConfiguring SELinux policy inside chroot.\n"
+
+# Install SELinux packages
+if ! dnf5 install -y selinux-policy selinux-policy-targeted policycoreutils container-selinux; then
+	printf "\n\e[1;31mError: Failed to install SELinux policy packages.\e[0m\n"
+	exit 1
+fi
+
+# Write system config
+mkdir -p /etc/selinux
+cat << 'EOF' > /etc/selinux/config
+SELINUX=enforcing
+SELINUXTYPE=targeted
+EOF
+
+# Load targeted policy store if missing
+if command -v semodule &>/dev/null; then
+	semodule -B 2>/dev/null || true
+fi
+
+# Trigger complete relabel on next boot
+touch /.autorelabel
+
+# Apply contexts to newly written configuration files in /etc
+if command -v restorecon &>/dev/null; then
+	printf "Applying SELinux context labels to modified configuration files...\n"
+	restorecon -R -v /etc 2>/dev/null || true
+fi
 
 # Create /etc/default/grub with standard Fedora settings BEFORE installing GRUB
 # This ensures the file exists when RPM scriptlets run
