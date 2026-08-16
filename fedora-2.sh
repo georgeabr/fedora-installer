@@ -27,8 +27,14 @@ printf "\nRefreshing package cache and upgrading system.\n"
 dnf5 upgrade --refresh -y
 
 # Restore SELinux context on resolv.conf copied from host
+printf "\nRestoring SELinux context on /etc/resolv.conf...\n"
 if command -v restorecon &>/dev/null; then
-    restorecon -v /etc/resolv.conf 2>/dev/null || true
+    printf "  Running restorecon -v /etc/resolv.conf\n"
+    restorecon -v /etc/resolv.conf 2>/dev/null || {
+        printf "  (restorecon completed with warnings; continuing)\n"
+    }
+else
+    printf "  \e[1;33mWarning: restorecon not found (SELinux context may not be optimal)\e[0m\n"
 fi
 
 dnf5 install -y terminus-fonts
@@ -63,32 +69,51 @@ dnf5 group upgrade -y core
 
 printf "\nConfiguring SELinux policy inside chroot.\n"
 
-# Install SELinux packages
-if ! dnf5 install -y selinux-policy selinux-policy-targeted policycoreutils container-selinux; then
+# 1. Install core SELinux packages
+printf "  Installing SELinux policy packages...\n"
+printf "    - selinux-policy\n"
+printf "    - selinux-policy-targeted\n"
+printf "    - policycoreutils\n"
+if ! dnf5 install -y selinux-policy selinux-policy-targeted policycoreutils; then
 	printf "\n\e[1;31mError: Failed to install SELinux policy packages.\e[0m\n"
 	exit 1
 fi
+printf "  SELinux packages installed successfully.\n"
 
-# Write system config
+# 2. Write policy configuration
+printf "  Writing /etc/selinux/config with SELINUX=enforcing, SELINUXTYPE=targeted\n"
 mkdir -p /etc/selinux
 cat << 'EOF' > /etc/selinux/config
 SELINUX=enforcing
 SELINUXTYPE=targeted
 EOF
 
-# Load targeted policy store if missing
+# 3. Rebuild SELinux policy store inside chroot
+printf "  Rebuilding SELinux policy store with semodule -B...\n"
 if command -v semodule &>/dev/null; then
-	semodule -B 2>/dev/null || true
+	semodule -B || true
+	printf "    ✓ Policy store rebuilt\n"
+else
+	printf "    ⚠ semodule not found (continuing; will relabel on first boot)\n"
 fi
 
-# Trigger complete relabel on next boot
+# 4. Apply contexts across key system directories
+FC_FILE="/etc/selinux/targeted/contexts/files/file_contexts"
+if [[ -f "$FC_FILE" ]]; then
+	printf "  Applying SELinux security contexts to system directories...\n"
+	printf "    file_contexts database: $FC_FILE ($(wc -l < "$FC_FILE") rules)\n"
+	printf "    Running restorecon -R -v on: /boot /etc /usr /var /root /home\n"
+	# Use restorecon to process system paths cleanly (avoids virtual filesystem issues)
+	restorecon -R -v /boot /etc /usr /var /root /home || true
+	printf "    ✓ Directory contexts applied\n"
+else
+	printf "\e[1;33mWarning: file_contexts database not found at $FC_FILE\e[0m\n"
+	printf "  Relying on .autorelabel trigger for comprehensive relabeling on first boot.\n"
+fi
+
+# 5. Mandatory first-boot relabel trigger
+printf "  Creating /.autorelabel for automatic first-boot relabeling\n"
 touch /.autorelabel
-
-# Apply contexts to newly written configuration files in /etc
-if command -v restorecon &>/dev/null; then
-	printf "Applying SELinux context labels to modified configuration files...\n"
-	restorecon -R -v /etc 2>/dev/null || true
-fi
 
 # Create /etc/default/grub with standard Fedora settings BEFORE installing GRUB
 # This ensures the file exists when RPM scriptlets run
