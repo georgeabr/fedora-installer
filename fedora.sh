@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=29
+SCRIPT_VERSION=30
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -593,6 +593,7 @@ EOF
 	# Extract partition number from UEFI partition
 	# Works for: /dev/nvme0n1p1 → 1, /dev/sda1 → 1
 	uefi_part_num=$(echo "$uefi_part" | sed 's/.*[^0-9]//')
+	printf "DEBUG: uefi_part=$uefi_part → uefi_part_num=$uefi_part_num\n"
 	
 	# Get ROOT_UUID for GRUB configuration
 	root_uuid=$(blkid -s UUID -o value "$root_part")
