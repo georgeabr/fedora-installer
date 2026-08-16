@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=32
+SCRIPT_VERSION=34
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -535,7 +535,10 @@ EOF
 		bash \
 		xfsprogs \
 		microcode_ctl \
-		linux-firmware
+		linux-firmware \
+		selinux-policy \
+		selinux-policy-targeted \
+		policycoreutils
     if [[ $? -ne 0 ]]; then
         printf "\n\e[1;31mError: dnf failed to install the base system.\e[0m\n"
         cleanup_mounts
@@ -602,6 +605,31 @@ EOF
 		exit 1
 	fi
 	
+	# Ensure SELinux configuration exists
+	mkdir -p /mnt/etc/selinux
+	cat << 'EOF' > /mnt/etc/selinux/config
+SELINUX=enforcing
+SELINUXTYPE=targeted
+EOF
+	
+	# Trigger automatic relabeling on first boot
+	touch /mnt/.autorelabel
+	
+	# Apply initial extended security attributes to mounted target root
+	if command -v setfiles &>/dev/null; then
+		if [[ -f /mnt/etc/selinux/targeted/contexts/files/file_contexts ]]; then
+			printf "\nApplying initial SELinux contexts to target filesystem...\n"
+			setfiles -r /mnt /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt 2>/dev/null || {
+				printf "\n\e[1;33mWarning: setfiles encountered errors during initial labeling (non-fatal).\e[0m\n"
+				printf "Final labeling will occur on first boot via .autorelabel.\n"
+			}
+		else
+			printf "\n\e[1;33mWarning: SELinux file_contexts not found yet (will be relabeled on first boot).\e[0m\n"
+		fi
+	else
+		printf "\n\e[1;33mWarning: setfiles not found on live system (SELinux will relabel on first boot).\e[0m\n"
+	fi
+	
 	# Mount necessary filesystems for chroot
 	mount --bind /dev /mnt/dev
 	mount --bind /dev/pts /mnt/dev/pts
@@ -611,16 +639,21 @@ EOF
 	mount --bind /sys/firmware/efi/efivars /mnt/sys/firmware/efi/efivars 2>/dev/null || true
 	
 	printf "\nDownloading fedora-2.sh from GitHub.\n"
-    curl -fsS --max-time 5 -H "Cache-Control: no-cache, no-store" -H "Pragma: no-cache" "https://raw.githubusercontent.com/georgeabr/fedora-installer/main/fedora-2.sh?_=$(date +%s)" > fedora-2.sh; \
- 		chmod +x fedora-2.sh; cp ./fedora-2.sh /mnt; \
-		chroot /mnt /bin/bash -c "./fedora-2.sh \"$hostname\" \"$username\" \"$disk\" \"$part_num\" \"$root_uuid\" \"$releasever\" \"$profile_choice\" \"$uefi_part_num\"";
-    if [[ $? -ne 0 ]]; then
-        printf "\n\e[1;31mError: fedora-2.sh failed inside the chroot.\e[0m\n"
-        cleanup_mounts
-        exit 1
-    fi
-   	# Delete after chroot exits
-    	rm -f /mnt/fedora-2.sh
+	curl -fsS --max-time 5 -H "Cache-Control: no-cache, no-store" -H "Pragma: no-cache" "https://raw.githubusercontent.com/georgeabr/fedora-installer/main/fedora-2.sh?_=$(date +%s)" > fedora-2.sh
+	chmod +x fedora-2.sh
+	cp ./fedora-2.sh /mnt/
+	
+	chroot /mnt /bin/bash -c "./fedora-2.sh \"$hostname\" \"$username\" \"$disk\" \"$part_num\" \"$root_uuid\" \"$releasever\" \"$profile_choice\" \"$uefi_part_num\""
+	chroot_status=$?
+	
+	# Clean up script copies from host and chroot
+	rm -f ./fedora-2.sh /mnt/fedora-2.sh
+
+	if [[ $chroot_status -ne 0 ]]; then
+		printf "\n\e[1;31mError: fedora-2.sh failed inside the chroot.\e[0m\n"
+		cleanup_mounts
+		exit 1
+	fi
 	
 	
 	cleanup_mounts
