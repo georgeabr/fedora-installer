@@ -7,6 +7,9 @@ part_num="$4"
 root_uuid="$5"
 releasever="$6"
 profile="${7:-1}"  # Default to 1 (multiuser/server) if not provided
+uefi_part_num="$8"
+
+printf "DEBUG fedora-2.sh: Received uefi_part_num=$uefi_part_num (8th param)\n"
 
 # dnf5 is already available in the chroot from Part 1 bootstrap
 
@@ -53,6 +56,19 @@ dnf5 install -y "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-releas
 printf "\nUpgrading core group packages.\n"
 dnf5 group upgrade -y core
 
+# Create /etc/default/grub with standard Fedora settings BEFORE installing GRUB
+# This ensures the file exists when RPM scriptlets run
+cat << 'EOF' > /etc/default/grub
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
+GRUB_DEFAULT=saved
+GRUB_DISABLE_SUBMENU=true
+GRUB_TERMINAL_OUTPUT="console"
+GRUB_CMDLINE_LINUX="rhgb quiet"
+GRUB_DISABLE_RECOVERY="true"
+GRUB_ENABLE_BLSCFG=true
+EOF
+
 printf "\nInstalling GRUB bootloader.\n"
 dnf5 install -y grub2-efi-x64 shim-x64 efibootmgr dosfstools os-prober mtools
 
@@ -68,17 +84,24 @@ GRUBCFG
 # Register kernel with kernel-install
 rm -f /boot/loader/entries/*.conf
 KVER="$(ls /lib/modules | head -n 1)"
+
+if [[ -z "$KVER" ]] || [[ ! -f "/lib/modules/$KVER/vmlinuz" ]]; then
+    printf "\n\e[1;31mError: Kernel version string is empty or /lib/modules/$KVER/vmlinuz does not exist.\e[0m\n"
+    exit 1
+fi
+
+printf "Detected kernel version: $KVER\n"
 kernel-install add "$KVER" "/lib/modules/$KVER/vmlinuz"
 
 # Generate main GRUB config
-sed -i 's/ quiet/ quiet mitigations=off /g' /etc/default/grub
 grub2-mkconfig -o /boot/grub2/grub.cfg
 
-# Reinstall grub2 to ensure shim is properly installed
-dnf5 reinstall -y grub2-efi-x64 shim-x64
-
-# Create EFI boot entry
-efibootmgr -c -d "$disk" -p "$part_num" -L "Fedora-$hostname" -l '\EFI\fedora\shimx64.efi'
+# Register Fedora entry in UEFI/NVRAM boot manager
+# Note: grub2-install is NOT used here to preserve Secure Boot compatibility
+# The pre-signed binaries from dnf5 install are already in place
+# Use $uefi_part_num (EFI partition) not $part_num (root partition)
+printf "DEBUG efibootmgr: disk=$disk, uefi_part_num=$uefi_part_num, hostname=$hostname\n"
+efibootmgr -c -d "$disk" -p "$uefi_part_num" -L "Fedora-$hostname" -l '\EFI\fedora\shimx64.efi'
 
 if [[ "$install_profile" == "desktop" ]]; then
 	printf "\nInstalling Intel video drivers and utilities.\n"
