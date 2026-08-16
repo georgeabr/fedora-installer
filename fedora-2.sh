@@ -81,10 +81,10 @@ fi
 printf "  SELinux packages installed successfully.\n"
 
 # 2. Write policy configuration
-printf "  Writing /etc/selinux/config with SELINUX=enforcing, SELINUXTYPE=targeted\n"
+printf "  Writing /etc/selinux/config with SELINUX=permissive (will switch to enforcing after first boot)\n"
 mkdir -p /etc/selinux
 cat << 'EOF' > /etc/selinux/config
-SELINUX=enforcing
+SELINUX=permissive
 SELINUXTYPE=targeted
 EOF
 
@@ -123,7 +123,7 @@ GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
 GRUB_DEFAULT=saved
 GRUB_DISABLE_SUBMENU=true
 GRUB_TERMINAL_OUTPUT="console"
-GRUB_CMDLINE_LINUX="rhgb quiet"
+GRUB_CMDLINE_LINUX="rhgb quiet selinux=1 security=selinux enforcing=0"
 GRUB_DISABLE_RECOVERY="true"
 GRUB_ENABLE_BLSCFG=true
 EOF
@@ -461,3 +461,14 @@ if [[ "$install_profile" == "desktop" ]]; then
 else
 	printf "\nInstallation completed. Server is ready. Please reboot to access the system.\n"
 fi
+
+printf "\n\e[1;36m=== SELinux Configuration ===\e[0m\n"
+printf "SELinux is set to PERMISSIVE mode for the initial boot.\n"
+printf "The system will automatically relabel all files on first boot.\n"
+printf "\nAfter successful first boot:\n"
+printf "  1. Edit /etc/selinux/config and change SELINUX=permissive to SELINUX=enforcing\n"
+printf "  2. Remove 'enforcing=0' from kernel parameters in /etc/default/grub\n"
+printf "     (or via: grub2-mkconfig -o /boot/grub2/grub.cfg)\n"
+printf "  3. Run: sudo setenforce 1\n"
+printf "  4. Reboot for final enforcement\n"
+printf "\nThis phased approach ensures a clean SELinux relabel without boot failures.\n"
