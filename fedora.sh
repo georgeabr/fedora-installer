@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=17
+SCRIPT_VERSION=20
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -98,9 +98,9 @@ check_and_install_dnf5() {
     printf "dnf5 not found. Installing...\n"
     
     if command -v pacman &>/dev/null; then
-        pacman -Sy --noconfirm dnf5
+        pacman -Sy --noconfirm dnf5 appstream
     elif command -v apt-get &>/dev/null; then
-        apt-get update && apt-get install -y dnf5
+        apt-get update && apt-get install -y dnf5 appstream
     else
         printf "\n\e[1;31mError: dnf5 not found and no known package manager detected.\e[0m\n"
         printf "Please install dnf5 manually before running this script.\n"
@@ -112,6 +112,17 @@ check_and_install_dnf5() {
         exit 1
     fi
     printf "dnf5 installed successfully.\n"
+}
+
+cleanup_mounts() {
+	printf "\nCleaning up mounted filesystems under /mnt.\n"
+	umount -l /mnt/boot/efi 2>/dev/null || true
+	umount -l /mnt/dev/pts 2>/dev/null || true
+	umount -l /mnt/dev 2>/dev/null || true
+	umount -l /mnt/proc 2>/dev/null || true
+	umount -l /mnt/sys 2>/dev/null || true
+	umount -l /mnt/run 2>/dev/null || true
+	umount -R /mnt 2>/dev/null || true
 }
 
 get_fedora_releasever() {
@@ -461,6 +472,7 @@ EOF
 		intel-ucode
     if [[ $? -ne 0 ]]; then
         printf "\n\e[1;31mError: dnf failed to install the base system.\e[0m\n"
+        cleanup_mounts
         exit 1
     fi
 
@@ -532,18 +544,14 @@ EOF
 		chroot /mnt /bin/bash -c "./fedora-2.sh \"$hostname\" \"$username\" \"$disk\" \"$part_num\" \"$root_uuid\" \"$releasever\" \"$profile_choice\"";
     if [[ $? -ne 0 ]]; then
         printf "\n\e[1;31mError: fedora-2.sh failed inside the chroot.\e[0m\n"
+        cleanup_mounts
         exit 1
     fi
    	# Delete after chroot exits
     	rm -f /mnt/fedora-2.sh
 	
-	printf "\nUnmounting all filesystems under /mnt.\n"
-	umount -l /mnt/dev/pts
-	umount -l /mnt/dev
-	umount -l /mnt/proc
-	umount -l /mnt/sys
-	umount -l /mnt/run
-	umount -R /mnt
+	
+	cleanup_mounts
 	
 	printf "\n\e[1;32mFedora installation complete! Reboot to test the new system.\e[0m\n"
 }
