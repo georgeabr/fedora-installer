@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=25
+SCRIPT_VERSION=26
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -533,7 +533,8 @@ EOF
 		systemd-udev \
 		bash \
 		xfsprogs \
-		intel-ucode
+		microcode_ctl \
+		linux-firmware
     if [[ $? -ne 0 ]]; then
         printf "\n\e[1;31mError: dnf failed to install the base system.\e[0m\n"
         cleanup_mounts
