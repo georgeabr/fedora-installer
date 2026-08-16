@@ -331,4 +331,4 @@ Contact: support@georgetech.co.uk
 ---
 
 **Last updated:** August 2026  
-**Tested with:** Fedora 44, Arch Linux 2026.08, Ubuntu 24.04 LTS, Debian 12
+**Tested with:** Arch Linux 2026.08
