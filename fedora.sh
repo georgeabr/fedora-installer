@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=22
+SCRIPT_VERSION=23
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -489,7 +489,7 @@ EOF
 	timedatectl set-ntp true
 
 	printf "\nInstalling Fedora base packages with dnf5.\n"
-	dnf5 install --installroot=/mnt --releasever="$releasever" --use-host-config -y \
+	dnf5 install --installroot=/mnt --releasever="$releasever" -y \
 		@core \
 		kernel \
 		grub2-efi-modules \
