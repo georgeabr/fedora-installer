@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=28
+SCRIPT_VERSION=29
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
