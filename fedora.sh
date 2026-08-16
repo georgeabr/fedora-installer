@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=21
+SCRIPT_VERSION=22
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -26,7 +26,7 @@ if [[ -z "$FEDORA_SH_SKIP_UPDATE" ]] && command -v curl &>/dev/null; then
     tmp_script=$(mktemp)
 
     printf "\nChecking for a newer version of this script...\n"
-    if curl -fsS --max-time 5 -o "$tmp_script" "$script_url"; then
+    if curl -fsS --max-time 5 -H "Cache-Control: no-cache, no-store" -H "Pragma: no-cache" -o "$tmp_script" "$script_url"; then
         remote_version="$(grep -m1 '^SCRIPT_VERSION=' "$tmp_script" | cut -d= -f2)"
         remote_version="${remote_version:-0}"
 
