@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=26
+SCRIPT_VERSION=27
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -135,6 +135,7 @@ check_and_install_dnf5() {
 cleanup_mounts() {
 	printf "\nCleaning up mounted filesystems under /mnt.\n"
 	swapoff "$swap_part" 2>/dev/null || true
+	umount -l /mnt/sys/firmware/efi/efivars 2>/dev/null || true
 	umount -l /mnt/boot/efi 2>/dev/null || true
 	umount -l /mnt/dev/pts 2>/dev/null || true
 	umount -l /mnt/dev 2>/dev/null || true
@@ -602,6 +603,7 @@ EOF
 	mount --bind /proc /mnt/proc
 	mount --bind /sys /mnt/sys
 	mount --bind /run /mnt/run
+	mount --bind /sys/firmware/efi/efivars /mnt/sys/firmware/efi/efivars 2>/dev/null || true
 	
 	printf "\nDownloading fedora-2.sh from GitHub.\n"
     curl -s https://raw.githubusercontent.com/georgeabr/fedora-installer/main/fedora-2.sh > fedora-2.sh; \
