@@ -17,14 +17,9 @@ This is a **Gentoo-style bootstrap installer** for Fedora Linux. It can be execu
 
 ### Live Environment Requirements
 
-- Any Linux live ISO with:
-  - `bash` (Bourne Again Shell)
-  - `curl` (for downloading Part 2 script)
-  - `dnf5` or `dnf` package manager
-  - `blkid`, `mount`, `fdisk`/`parted` (partition utilities)
-  - `chroot` support
+Should work on Arch Linux, Fedora, Ubuntu, Debian live environments.
 
-**Tested on:** Arch Linux, Fedora, Ubuntu, Debian live environments
+The installer will obtain `dnf5` and other required tools depending on your live distro.
 
 ### Hardware Requirements
 
@@ -284,7 +279,7 @@ sudo sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /etc/selinux/config && \
 - **UEFI only** — BIOS/CSM mode not supported
 - **Secure Boot** — Compatible, uses pre-signed binaries
 - **RPMFusion repos** — Automatically enabled (free and nonfree)
-- **Live environment** — Must have `dnf5`, `curl`, `chroot` support
+- **Live environment** — Must have `curl` and `chroot` support
 
 ### Safety
 
