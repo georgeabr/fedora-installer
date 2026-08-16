@@ -33,8 +33,8 @@ The installer will obtain `dnf5` and other required tools depending on your live
 The installer expects **three pre-existing partitions**:
 
 1. **EFI partition** (500 MiB–1 GiB, FAT32): `1-1`
-2. **Swap partition** (optional, but recommended): `1-2` 
-3. **Root partition** (remaining space, ext4 or xfs): `1-3`
+2. **Root partition** (remaining space, ext4 or xfs): `1-2`
+3. **Swap partition** (optional, but recommended): `1-3`
 
 **Important:** Create these partitions before running the installer.
 
@@ -59,8 +59,8 @@ See the [diskviz repository](https://github.com/georgeabr/systems-programming/tr
 
 1. Start `diskviz` pointing to your target disk
 2. Create EFI partition: Select free space → New → 512 MiB → Type: EFI System
-3. Create Swap partition: Select free space → New → (e.g., 8 GiB) → Type: Linux Swap
-4. Create Root partition: Select remaining free space → New → Type: Linux Filesystem
+3. Create Root partition: Select remaining free space → New → Type: Linux Filesystem
+4. Create Swap partition: Select free space → New → (e.g., 8 GiB) → Type: Linux Swap
 5. Exit and write changes
 
 Then proceed to running `fedora.sh`.
@@ -100,14 +100,14 @@ Executed on the live ISO, this script:
 **Usage:**
 
 ```bash
-sudo ./fedora.sh <EFI_PARTITION> <SWAP_PARTITION> <ROOT_PARTITION> [PROFILE]
+sudo ./fedora.sh <EFI_PARTITION> <ROOT_PARTITION> <SWAP_PARTITION> [PROFILE]
 ```
 
 **Arguments:**
 
 - `<EFI_PARTITION>`: EFI partition in DISK-PART format (e.g., `1-1`)
-- `<SWAP_PARTITION>`: Swap partition in DISK-PART format (e.g., `1-2`)
-- `<ROOT_PARTITION>`: Root partition in DISK-PART format (e.g., `1-3`)
+- `<ROOT_PARTITION>`: Root partition in DISK-PART format (e.g., `1-2`)
+- `<SWAP_PARTITION>`: Swap partition in DISK-PART format (e.g., `1-3`)
 - `[PROFILE]`: Installation profile (optional, default: 1)
   - `1` = Server (text mode, minimal)
   - `2` = Desktop (KDE Plasma, Firefox, GUI tools)
@@ -139,7 +139,7 @@ Boot from live ISO, then:
 # Find your partitions
 sudo lsblk
 
-# Install to /dev/nvme0n1 (EFI: p1, Swap: p2, Root: p3)
+# Install to /dev/nvme0n1 (EFI: p1, Root: p2, Swap: p3)
 sudo ./fedora.sh 1-1 1-2 1-3 1
 ```
 
@@ -159,7 +159,7 @@ Installation completed. Server is ready. Please reboot to access the system.
 # Find your partitions
 sudo lsblk
 
-# Install to /dev/sda (EFI: p1, Swap: p2, Root: p3)
+# Install to /dev/sda (EFI: p1, Root: p2, Swap: p3)
 sudo ./fedora.sh 1-1 1-2 1-3 2
 ```
 
@@ -331,4 +331,4 @@ Contact: support@georgetech.co.uk
 ---
 
 **Last updated:** August 2026  
-**Tested with:** Arch Linux 2026.08
+**Tested with:** Fedora 44, Arch Linux 2026.08, Ubuntu 24.04 LTS, Debian 12
