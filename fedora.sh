@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=23
+SCRIPT_VERSION=24
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -447,15 +447,20 @@ EOF
 	printf "\nActivating swap partition.\n"
 	swapon "$swap_part" > /dev/null 2>&1;
     if [[ $? -ne 0 ]]; then
-  		printf "Formatting and activating swap file.\n";
+  		printf "Swap partition not formatted. Formatting with mkswap.\n";
     		mkswap "$swap_part" > /dev/null 2>&1;
+    		if [[ $? -ne 0 ]]; then
+    			printf "\n\e[1;31mError: Failed to format swap partition $swap_part with mkswap.\e[0m\n"
+    			exit 1
+    		fi
+    		
             swapon "$swap_part" > /dev/null 2>&1;
             if [[ $? -ne 0 ]]; then
-                printf "\n\e[1;31mError: Failed to activate swap partition $swap_part.\e[0m\n"
+                printf "\n\e[1;31mError: Failed to activate swap partition $swap_part after formatting.\e[0m\n"
                 exit 1
             fi
 	fi
-    printf "Swap file has been enabled.\n"
+    printf "Swap partition has been enabled.\n"
 
 	case "$filesystem" in
  		ext4)
