@@ -306,6 +306,80 @@ useradd -m -G wheel -s /bin/bash "$username"
 printf "Enter password for user <$username>...\n"
 passwd "$username"
 
+# Create SELinux setup guide for user
+printf "\nCreating SELinux enforcement guide in user home directory.\n"
+cat << 'EOF' > "/home/$username/SELINUX_SETUP.txt"
+=== SELinux Enforcement Setup ===
+
+Your Fedora system has been installed with SELinux in PERMISSIVE mode.
+This allows the system to boot safely and relabel all files on first boot.
+
+CURRENT STATUS
+--------------
+SELinux Mode: Permissive (warning mode, not enforcing)
+Configuration: /etc/selinux/config
+Kernel Parameters: selinux=1 security=selinux enforcing=0
+
+WHY THIS MATTERS
+----------------
+SELinux protects your system from unauthorized access by enforcing
+mandatory access controls. After successful first boot, you should
+switch to ENFORCING mode for full security.
+
+ENABLE SELINUX ENFORCEMENT
+---------------------------
+
+Step 1: Verify SELinux is working in permissive mode
+  $ getenforce
+  Expected output: Permissive
+
+Step 2: Change SELinux config to enforcing mode
+  $ sudo sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /etc/selinux/config
+  
+  Verify the change:
+  $ sudo grep "^SELINUX=" /etc/selinux/config
+
+Step 3: Remove kernel permissive override from GRUB
+  $ sudo sed -i 's/ enforcing=0//' /etc/default/grub
+  
+  Verify the change:
+  $ sudo grep "GRUB_CMDLINE_LINUX=" /etc/default/grub
+  Should show: GRUB_CMDLINE_LINUX="rhgb quiet selinux=1 security=selinux"
+
+Step 4: Apply GRUB changes
+  $ sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+
+Step 5: Set enforcing mode immediately
+  $ sudo setenforce 1
+
+Step 6: Verify enforcing is active
+  $ getenforce
+  Expected output: Enforcing
+
+Step 7: Reboot to finalize
+  $ sudo reboot
+
+QUICK ONE-LINER (if you trust it)
+---------------------------------
+$ sudo sed -i 's/SELINUX=permissive/SELINUX=enforcing/' /etc/selinux/config && \
+  sudo sed -i 's/ enforcing=0//' /etc/default/grub && \
+  sudo grub2-mkconfig -o /boot/grub2/grub.cfg && \
+  sudo setenforce 1 && \
+  echo "SELinux set to enforcing. Reboot to finalize: sudo reboot"
+
+TROUBLESHOOTING
+---------------
+If the system fails to boot after enabling enforcing:
+  - Boot the live USB again
+  - Mount the root filesystem
+  - Run: sudo sed -i 's/SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config
+  - Investigate denial logs
+  - Enable enforcing mode after issues are resolved
+
+For help: https://selinuxproject.org/
+EOF
+chown "$username:$username" "/home/$username/SELINUX_SETUP.txt"
+
 # Configure user's GTK settings
 mkdir -p "/home/$username/.config"
 chown "$username:$username" "/home/$username/.config"
