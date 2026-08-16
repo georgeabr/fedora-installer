@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=30
+SCRIPT_VERSION=32
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -611,7 +611,7 @@ EOF
 	mount --bind /sys/firmware/efi/efivars /mnt/sys/firmware/efi/efivars 2>/dev/null || true
 	
 	printf "\nDownloading fedora-2.sh from GitHub.\n"
-    curl -s https://raw.githubusercontent.com/georgeabr/fedora-installer/main/fedora-2.sh > fedora-2.sh; \
+    curl -fsS --max-time 5 -H "Cache-Control: no-cache, no-store" -H "Pragma: no-cache" "https://raw.githubusercontent.com/georgeabr/fedora-installer/main/fedora-2.sh?_=$(date +%s)" > fedora-2.sh; \
  		chmod +x fedora-2.sh; cp ./fedora-2.sh /mnt; \
 		chroot /mnt /bin/bash -c "./fedora-2.sh \"$hostname\" \"$username\" \"$disk\" \"$part_num\" \"$root_uuid\" \"$releasever\" \"$profile_choice\" \"$uefi_part_num\"";
     if [[ $? -ne 0 ]]; then
