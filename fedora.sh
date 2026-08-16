@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=20
+SCRIPT_VERSION=21
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -99,8 +99,26 @@ check_and_install_dnf5() {
     
     if command -v pacman &>/dev/null; then
         pacman -Sy --noconfirm dnf5 appstream
+        if [[ $? -ne 0 ]]; then
+            printf "\n\e[1;31mError: pacman failed to install dnf5 and appstream.\e[0m\n"
+            printf "This may be due to network issues or DNS resolution failure.\n"
+            printf "Try one of the following:\n"
+            printf "  1. Check your network connection with \`nmtui\`\n"
+            printf "  2. Verify DNS works: \`getent hosts archive.fedoraproject.org\`\n"
+            printf "  3. Install dnf5 manually: \`sudo pacman -S dnf5 appstream\` (outside this script)\n"
+            exit 1
+        fi
     elif command -v apt-get &>/dev/null; then
         apt-get update && apt-get install -y dnf5 appstream
+        if [[ $? -ne 0 ]]; then
+            printf "\n\e[1;31mError: apt-get failed to install dnf5 and appstream.\e[0m\n"
+            printf "This may be due to network issues or DNS resolution failure.\n"
+            printf "Try one of the following:\n"
+            printf "  1. Check your network connection\n"
+            printf "  2. Verify DNS works: \`getent hosts archive.fedoraproject.org\`\n"
+            printf "  3. Install dnf5 manually: \`sudo apt-get install dnf5 appstream\` (outside this script)\n"
+            exit 1
+        fi
     else
         printf "\n\e[1;31mError: dnf5 not found and no known package manager detected.\e[0m\n"
         printf "Please install dnf5 manually before running this script.\n"
@@ -255,6 +273,18 @@ start_install() {
 		# This kills the script process immediately and returns to prompt
         { sleep 0.1; kill -9 -$$; } &
         exit 1
+    fi
+    
+    # Also verify DNS resolution works (not just ICMP)
+    if ! getent hosts archive.fedoraproject.org > /dev/null 2>&1; then
+        printf "\n\e[1;33mWarning: DNS resolution failed. Pacman/dnf5 may not be able to download packages.\e[0m\n"
+        printf "Try to configure DNS before continuing, or ensure your network is properly configured.\n"
+        printf "Continue anyway? (Y/y to continue, any other input to stop): "
+        read -r dns_continue
+        if ! [[ "$dns_continue" == "y" ]] && ! [[ "$dns_continue" == "Y" ]]; then
+            printf "Exiting.\n"
+            exit 1
+        fi
     fi
     printf "Internet connection detected.\n"
 
