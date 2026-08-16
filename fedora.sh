@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=24
+SCRIPT_VERSION=25
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -134,6 +134,7 @@ check_and_install_dnf5() {
 
 cleanup_mounts() {
 	printf "\nCleaning up mounted filesystems under /mnt.\n"
+	swapoff "$swap_part" 2>/dev/null || true
 	umount -l /mnt/boot/efi 2>/dev/null || true
 	umount -l /mnt/dev/pts 2>/dev/null || true
 	umount -l /mnt/dev 2>/dev/null || true
@@ -492,6 +493,34 @@ EOF
 
 	printf "\nSetting systemd NTP clock sync.\n"
 	timedatectl set-ntp true
+
+	printf "\nConfiguring Fedora repositories in target root.\n"
+	mkdir -p /mnt/etc/yum.repos.d
+	
+	# Detect host architecture (e.g. x86_64)
+	arch=$(uname -m)
+
+	cat << EOF > /mnt/etc/yum.repos.d/fedora.repo
+[fedora]
+name=Fedora $releasever - $arch
+metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-$releasever&arch=$arch
+enabled=1
+repo_gpgcheck=0
+gpgcheck=0
+skip_if_unavailable=False
+EOF
+	cat /mnt/etc/yum.repos.d/fedora.repo
+
+	cat << EOF > /mnt/etc/yum.repos.d/fedora-updates.repo
+[updates]
+name=Fedora $releasever - $arch - Updates
+metalink=https://mirrors.fedoraproject.org/metalink?repo=updates-released-f$releasever&arch=$arch
+enabled=1
+repo_gpgcheck=0
+gpgcheck=0
+skip_if_unavailable=False
+EOF
+	cat /mnt/etc/yum.repos.d/fedora-updates.repo
 
 	printf "\nInstalling Fedora base packages with dnf5.\n"
 	dnf5 install --installroot=/mnt --releasever="$releasever" -y \
