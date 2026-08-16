@@ -2,7 +2,7 @@
 
 # Bump this number whenever you push a change to GitHub, so the self-update
 # check below can tell an older local copy from a newer (or unpushed) one.
-SCRIPT_VERSION=16
+SCRIPT_VERSION=17
 
 # --- root check ---
 if [[ $EUID -ne 0 ]]; then
@@ -529,7 +529,7 @@ EOF
 	printf "\nDownloading fedora-2.sh from GitHub.\n"
     curl -s https://raw.githubusercontent.com/georgeabr/fedora-installer/main/fedora-2.sh > fedora-2.sh; \
  		chmod +x fedora-2.sh; cp ./fedora-2.sh /mnt; \
-		chroot /mnt /bin/bash -c "./fedora-2.sh '$hostname' '$username' '$disk' '$part_num' '$root_uuid' '$releasever' '$4'";
+		chroot /mnt /bin/bash -c "./fedora-2.sh \"$hostname\" \"$username\" \"$disk\" \"$part_num\" \"$root_uuid\" \"$releasever\" \"$profile_choice\"";
     if [[ $? -ne 0 ]]; then
         printf "\n\e[1;31mError: fedora-2.sh failed inside the chroot.\e[0m\n"
         exit 1
@@ -551,7 +551,7 @@ EOF
 # This is the entry point for the script, validating parameters
 if is_disk_partition_format "$1" && is_disk_partition_format "$2" && is_disk_partition_format "$3";
 then
-	start_install "$1" "$2" "$3" "$profile_choice";
+	start_install "$1" "$2" "$3";
 else
   printf "\n\e[1;31mError: Missing or invalid arguments.\e[0m\n"
   arg_labels=("UEFI-PART" "ROOT-PART" "SWAP-PART")
