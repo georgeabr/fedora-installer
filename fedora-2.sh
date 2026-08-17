@@ -123,8 +123,8 @@ GRUB_TIMEOUT=5
 GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
 GRUB_DEFAULT=saved
 GRUB_DISABLE_SUBMENU=true
-GRUB_TERMINAL_OUTPUT="console"
-GRUB_FONT=/usr/share/grub/ter-u22n
+GRUB_TERMINAL_OUTPUT="gfxterm"
+GRUB_FONT=/usr/share/grub/ter-u22n.pf2
 GRUB_CMDLINE_LINUX="rhgb quiet selinux=1 security=selinux enforcing=0"
 GRUB_DISABLE_RECOVERY="true"
 GRUB_ENABLE_BLSCFG=true
