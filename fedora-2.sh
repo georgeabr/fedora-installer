@@ -37,7 +37,8 @@ else
     printf "  \e[1;33mWarning: restorecon not found (SELinux context may not be optimal)\e[0m\n"
 fi
 
-dnf5 install -y terminus-fonts
+dnf5 install -y terminus-fonts-console
+dnf5 install -y terminus-fonts-grub2
 
 rm -rf /etc/localtime
 ln -sf /usr/share/zoneinfo/Europe/London /etc/localtime
@@ -123,6 +124,7 @@ GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
 GRUB_DEFAULT=saved
 GRUB_DISABLE_SUBMENU=true
 GRUB_TERMINAL_OUTPUT="console"
+GRUB_FONT=/usr/share/grub/ter-u22n
 GRUB_CMDLINE_LINUX="rhgb quiet selinux=1 security=selinux enforcing=0"
 GRUB_DISABLE_RECOVERY="true"
 GRUB_ENABLE_BLSCFG=true
@@ -184,7 +186,7 @@ else
 fi
 
 # System utilities (both profiles)
-dnf5 install -y mc nano vim htop wget less man-pages mandoc bc unzip unrar aria2 7zip
+dnf5 install -y mc nano vim htop wget less man-pages mandoc bc unzip unrar aria2 7zip iwlwifi-mvm-firmware
 
 if [[ "$install_profile" == "desktop" ]]; then
 	# Fonts (desktop only)
